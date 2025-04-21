@@ -5,6 +5,7 @@ For some explanations of these examples, see the [Gymnasium documentation](https
 ### Environments
 This repository hosts the examples that are shown [on the environment creation documentation](https://gymnasium.farama.org/tutorials/gymnasium_basics/environment_creation/).
 - `GridWorldEnv`: Simplistic implementation of gridworld environment
+- `Simple Elevator`: simple version of Elevator environment
 
 ### Wrappers
 This repository hosts the examples that are shown [on wrapper documentation](https://gymnasium.farama.org/api/wrappers/).
@@ -27,6 +28,7 @@ PRs may require accompanying PRs in [the documentation repo](https://github.com/
 To install your new environment, run the following commands:
 
 ```{shell}
+pip install -r requirements.txt
 cd Elevators
 pip install -e .
 ```
