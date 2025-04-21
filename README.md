@@ -27,7 +27,7 @@ PRs may require accompanying PRs in [the documentation repo](https://github.com/
 To install your new environment, run the following commands:
 
 ```{shell}
-cd Elevators-v1
+cd Elevators
 pip install -e .
 ```
 
