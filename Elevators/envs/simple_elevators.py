@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Tuple, Any
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
+from enum import Enum
 
 # ───────────────── data classes ──────────────────────────────────────────
 @dataclass
@@ -36,6 +37,12 @@ class Car:
     """
     itinerary: int = None
 
+class Event(Enum):
+    CAR_DOOR_CLOSE = 0
+    CAR_DOOR_OPEN  = 1
+    SPAWN_PASSENGER = 2
+
+
 # ───────────────── environment ──────────────────────────────────────────
 class ElevatorEnv(gym.Env):
     """
@@ -53,20 +60,26 @@ class ElevatorEnv(gym.Env):
                  speed_m_s:  float = 1.5,
                  floor_h_m:  float = 3.5,
                  door_time:  float = 2.0,
-                 passenger_rate: float = 0.2,    # λ (Poisson) per second
+                 avg_passengers_spawning_time: float = 50.0,
+                #  passenger_rate: float = 0.2,    # λ (Poisson) per second
+                 max_passengers_at_a_time: int = 10,
+                 avg_passengers_at_a_time: float = 5.0,
                  seed: int | None = None):
 
         self.N, self.M = num_floors, num_cars
         self.cap       = capacity
         self.v         = speed_m_s
         self.sec_floor = floor_h_m / speed_m_s
+        # print(f"sec_floor: {self.sec_floor}")
         self.t_door    = door_time
-        self.lambda_p  = passenger_rate
+        # self.lambda_p  = passenger_rate
+        self.avg_passengers_spawning_time = avg_passengers_spawning_time
         self.rng       = np.random.default_rng(seed)
-
+        self.max_passengers_at_a_time = max_passengers_at_a_time
+        self.avg_passengers_at_a_time = avg_passengers_at_a_time
         # observation = (N × M × 5) tensor flattened
         self.observation_space = spaces.Box(
-            low=0, high=np.inf, shape=(self.N * self.M * 5,), dtype=np.float32)
+            low=0, high=np.inf, shape=(self.N, self.M, 5,), dtype=np.float32)
         # action = one (floor,car) pair, add one for idle
         self.action_space = spaces.MultiDiscrete([self.N + 1, self.M])
         self._reset_state()
@@ -86,14 +99,21 @@ class ElevatorEnv(gym.Env):
         # if self._legal_stop(car, floor):
         #     car.itinerary.append(floor)
 
-        reward = self._advance_until_event()      # discrete‑event simulation
+        reward, event = self._advance_until_event()      # discrete‑event simulation
+        self.current_event = event
         return self._obs(), reward, False, False, self._info()
 
     # ---------------- simulation core -----------------------------------
+    
     def _advance_until_event(self) -> float:
         """Run until next passenger or door‑closure event, return reward."""
+        self.new_request_this_step = None
+        self.current_event = None
+        
         # ––– time until next Poisson arrival –––
-        t_pass = self.rng.exponential(1.0 / self.lambda_p)
+        if self.t_pass is None:
+            self.t_pass = self.rng.exponential(self.avg_passengers_spawning_time) + self.time
+        
 
         # ––– time until any car event –––
         t_car = np.inf
@@ -104,16 +124,20 @@ class ElevatorEnv(gym.Env):
                 t_car = min(t_car,
                             abs(car.itinerary - car.position) * self.sec_floor)
 
-        dt = min(t_pass, t_car)
+        dt = min(self.t_pass, t_car + self.time) - self.time
         self.time += dt
 
+        is_end = False
+        end_reason = None
         # move / count down doors
         for car in self.cars:
             if car.door_open:
                 car.t_door -= dt
                 if car.t_door <= 1e-6:
                     car.door_open, car.t_door = False, 0.0
-                    return self._reward_snapshot()     # decision point
+                    assert is_end is False
+                    is_end = True
+                    end_reason = Event.CAR_DOOR_CLOSE
             elif car.itinerary is not None:
                 sign = np.sign(car.itinerary - car.position)
                 car.position += sign * (dt / self.sec_floor)
@@ -121,21 +145,28 @@ class ElevatorEnv(gym.Env):
                 if abs(car.position - car.itinerary) < 1e-3:
                     car.position = float(car.itinerary)
                     car.itinerary = None
-                    self._handle_arrival(car)          # open doors
+                    self._handle_arrival(car)         
                     car.door_open, car.t_door = True, self.t_door
-                    return self._reward_snapshot()     # decision point
+                    assert is_end is False
+                    is_end = True
+                    end_reason = Event.CAR_DOOR_OPEN
             else:
                 car.direction = 0
 
         # passenger arrival occurs first
-        if t_pass < t_car:
+        if abs(self.t_pass - self.time) < 1e-3:
             self._spawn_passenger()
-            return self._reward_snapshot()             # decision point
-        
-        assert False, "Should never reach here"
+            self.t_pass = None
+            assert is_end is False
+            is_end = True
+            end_reason = Event.SPAWN_PASSENGER
+
+        assert is_end is True, "is_end should be True"
+        return self._reward_snapshot(), end_reason
 
     # ---------------- boarding/alighting & generator ---------------------
     def _handle_arrival(self, car: Car):
+        # print(f"car arrived at floor {car.position}")
         floor = int(car.position)
         # alight
         for p in list(car.passengers):
@@ -156,10 +187,13 @@ class ElevatorEnv(gym.Env):
         self.hall[floor, :] = 0  #! if capacity is limited, should not be like this
 
     def _spawn_passenger(self):
+        n_passengers = self.rng.exponential(scale=self.avg_passengers_at_a_time) + 1
         o = self.rng.integers(0, self.N)
-        d = self.rng.choice([f for f in range(self.N) if f != o])
-        self.waiting.append(Passenger(o, d, self.time))
-        self.hall[o, 0 if d > o else 1] += 1
+        for i in range(int(n_passengers)):
+            d = self.rng.choice([f for f in range(self.N) if f != o])
+            self.waiting.append(Passenger(o, d, self.time))
+            self.new_request_this_step = o
+            self.hall[o, 0 if d > o else 1] |= 1
 
     # ---------------- reward --------------------------------------------
     def _reward_snapshot(self):
@@ -189,13 +223,14 @@ class ElevatorEnv(gym.Env):
             for p in c.passengers:
                 A[p.destination, j] = 1
         # positions & directions stretched to N×M
+        # print(f"cars: {[c.position for c in self.cars]}")
         P = np.repeat(np.array([c.position for c in self.cars]).reshape(len(self.cars), 1), self.N, 1).T
         D = np.repeat(np.array([c.direction for c in self.cars]).reshape(len(self.cars), 1), self.N, 1).T
         # print(f"P shape: {P.shape}, D shape: {D.shape}")
         # print(f"B shape: {B.shape}, A shape: {A.shape}")
         stacked = np.stack([B[:, j, :] for j in range(2)] + [A, P, D], 2)
         # print(f"stacked shape: {stacked.shape}")
-        return stacked.astype(np.float32).flatten()
+        return stacked.astype(np.float32)
 
     def _reset_state(self):
         self.time = 0.0
@@ -203,6 +238,8 @@ class ElevatorEnv(gym.Env):
         self.hall    = np.zeros((self.N, 2), int)   # hall‑call counts
         self.waiting : List[Passenger] = []
         self.done    : List[Passenger] = []
+        self.current_event = None
+        self.t_pass = None
 
     def _info(self):
         
@@ -213,11 +250,53 @@ class ElevatorEnv(gym.Env):
                 "cars_direction": [c.direction for c in self.cars],
                 "cars_position": [c.position for c in self.cars],
                 "cars": self.cars,
-                "hall_calls": self.hall}
+                "hall_calls": self.hall,
+                "event": self.current_event,
+                "idle_cars": self._find_idle_cars(),
+                "done": len(self.done),
+                }
+    
+    # ---------------- utils -------------------------------------
+    def _find_new_requests(self):
+        return self.new_request_this_step
+    
+    def _find_idle_cars(self):
+        idle_cars = []
+        for i, car in enumerate(self.cars):
+            if car.itinerary is None:
+                idle_cars.append(i)
+        return idle_cars
+    
+    def _find_cars_with_itinerary(self):
+        cars_with_itinerary = []
+        for i, car in enumerate(self.cars):
+            if car.itinerary is not None:
+                cars_with_itinerary.append(i)
+        return cars_with_itinerary
+
+    def _find_cars_with_passengers(self):
+        cars_with_passengers = []
+        for i, car in enumerate(self.cars):
+            if len(car.passengers) > 0:
+                cars_with_passengers.append(i)
+        return cars_with_passengers
+
 
     # ---------------- render --------------------------------------------
     def render(self, mode="human"):
+        event_to_str = {
+            Event.CAR_DOOR_CLOSE: "CLOSE",
+            Event.CAR_DOOR_OPEN:  "OPEN",
+            Event.SPAWN_PASSENGER: "SPAWN"
+        }
         print(f"t={self.time:.1f}s | waiting={len(self.waiting)}")
+        color_map = {
+            Event.CAR_DOOR_CLOSE: "\033[91m",  # Red
+            Event.CAR_DOOR_OPEN:  "\033[92m",  # Green
+            Event.SPAWN_PASSENGER: "\033[93m"  # Yellow
+        }
+        color_prefix = color_map.get(self.current_event, "\033[0m")
+        print(f"{color_prefix}current event: {event_to_str[self.current_event]}\033[0m")
         for k, c in enumerate(self.cars):
             print(f" Car{k} floor={c.position:.2f} dir={c.direction:+d}"
                   f" load={len(c.passengers)} itinerary={c.itinerary}")

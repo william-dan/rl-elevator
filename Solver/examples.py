@@ -7,3 +7,4 @@ for _ in range(200):
     action = env.action_space.sample()   # random dispatch
     obs, reward, terminated, truncated, info = env.step(action)
     if _ % 20 == 0: env.render()
+

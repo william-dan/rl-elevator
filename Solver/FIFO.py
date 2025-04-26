@@ -11,33 +11,30 @@ class FIFOSolver:
 
     def select_action(self, info):
         diff = info['hall_calls'] - self.prev_hall_calls
-        self.prev_hall_calls = info['hall_calls']
+        self.prev_hall_calls = info['hall_calls'].copy()
         new_requests = [i for i in range(len(diff)) if diff[i][0] > 0 or diff[i][1] > 0]
         assert len(new_requests) == 0 or len(new_requests) == 1, "FIFO only supports one request at a time"
         self.queue.extend(new_requests)
         
         cars_itinerary = info["cars_itinerary"]
         
-       
+        if len(self.queue) > 0 and (None in cars_itinerary):
+            target = self.queue.popleft()
+            target_car = [i for i in range(len(cars_itinerary)) if cars_itinerary[i] is None]
+            return (target, target_car[0])
+        
         for i in range(len(cars_itinerary)):
             if cars_itinerary[i] is None:
                 car_passengers = info["cars"][i].passengers
                 if car_passengers:
                     return (car_passengers[0].destination, i)
-                    
-            
-        if self.queue and None in cars_itinerary:
-            target = self.queue.popleft()
-            target_car = [i for i in range(len(cars_itinerary)) if cars_itinerary[i] is None]
-            return (target, target_car[0])
-            
         return (info["N"], 0)  # No action if no requests
         
 
     def run_episode(self, max_steps=100):
         obs, info = self.env.reset()
         self.reset()
-        self.prev_hall_calls = info['hall_calls']
+        self.prev_hall_calls = info['hall_calls'].copy()
         total_reward = 0
         for _ in range(max_steps):
             action = self.select_action(info)
@@ -57,7 +54,7 @@ class FIFOSolver:
 
 if __name__ == "__main__":
     import Elevators
-    env = gym.make("Elevators/Elevators-v0", num_floors=10, num_cars=4, passenger_rate=0.3)
+    env = gym.make("Elevators/Elevators-v0", num_floors=20, num_cars=4)
     solver = FIFOSolver(env)
     rewards = []
     for _ in range(10):
