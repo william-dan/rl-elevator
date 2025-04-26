@@ -145,8 +145,9 @@ class ElevatorEnv(gym.Env):
                 car.passengers.remove(p)
         # board
         waiting_here = [p for p in self.waiting if p.origin == floor]
-        space = self.cap - len(car.passengers)
-        for p in waiting_here[:space]:
+        # space = self.cap - len(car.passengers) #!!!!!!!!!!!!!
+        # for p in waiting_here[:space]:
+        for p in waiting_here:
             p.t_board = self.time
             car.passengers.append(p)
             self.waiting.remove(p)
