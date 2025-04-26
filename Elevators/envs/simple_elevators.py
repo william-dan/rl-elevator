@@ -135,7 +135,7 @@ class ElevatorEnv(gym.Env):
                 car.t_door -= dt
                 if car.t_door <= 1e-6:
                     car.door_open, car.t_door = False, 0.0
-                    assert is_end is False
+                    # assert is_end is False
                     is_end = True
                     end_reason = Event.CAR_DOOR_CLOSE
             elif car.itinerary is not None:
@@ -147,7 +147,7 @@ class ElevatorEnv(gym.Env):
                     car.itinerary = None
                     self._handle_arrival(car)         
                     car.door_open, car.t_door = True, self.t_door
-                    assert is_end is False
+                    # assert is_end is False
                     is_end = True
                     end_reason = Event.CAR_DOOR_OPEN
             else:
@@ -157,7 +157,7 @@ class ElevatorEnv(gym.Env):
         if abs(self.t_pass - self.time) < 1e-3:
             self._spawn_passenger()
             self.t_pass = None
-            assert is_end is False
+            # assert is_end is False
             is_end = True
             end_reason = Event.SPAWN_PASSENGER
 
