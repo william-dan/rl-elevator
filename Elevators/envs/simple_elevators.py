@@ -115,7 +115,7 @@ class ElevatorEnv(gym.Env):
                     car.door_open, car.t_door = False, 0.0
                     return self._reward_snapshot()     # decision point
             elif car.itinerary is not None:
-                sign = np.sign(car.itinerary[0] - car.position)
+                sign = np.sign(car.itinerary - car.position)
                 car.position += sign * (dt / self.sec_floor)
                 car.direction = int(sign)
                 if abs(car.position - car.itinerary) < 1e-3:
