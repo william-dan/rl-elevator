@@ -30,7 +30,11 @@ class Car:
     door_open: bool = False
     t_door: float   = 0.0          # time until door state change
     passengers: List[Passenger] = field(default_factory=list)
-    itinerary:  List[int] = field(default_factory=list)
+    # itinerary:  List[int] = field(default_factory=list)
+    """
+    itinerary can be changed at any time.
+    """
+    itinerary: int = None
 
 # ───────────────── environment ──────────────────────────────────────────
 class ElevatorEnv(gym.Env):
@@ -45,7 +49,7 @@ class ElevatorEnv(gym.Env):
     def __init__(self,
                  num_floors: int = 10,
                  num_cars:   int = 4,
-                 capacity:   int = 10,
+                 capacity:   int = np.inf,      # for simplicity
                  speed_m_s:  float = 1.5,
                  floor_h_m:  float = 3.5,
                  door_time:  float = 2.0,
@@ -63,8 +67,8 @@ class ElevatorEnv(gym.Env):
         # observation = (N × M × 5) tensor flattened
         self.observation_space = spaces.Box(
             low=0, high=np.inf, shape=(self.N * self.M * 5,), dtype=np.float32)
-        # action = one (floor,car) pair
-        self.action_space = spaces.MultiDiscrete([self.N, self.M])
+        # action = one (floor,car) pair, add one for idle
+        self.action_space = spaces.MultiDiscrete([self.N + 1, self.M])
         self._reset_state()
 
     # ---------------- Gymnasium API -------------------------------------
@@ -76,9 +80,11 @@ class ElevatorEnv(gym.Env):
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         floor, car_idx = action
         car = self.cars[car_idx]
+        if floor != self.N:  # idle
+            car.itinerary = floor
         # schedule if legal
-        if self._legal_stop(car, floor) and floor not in car.itinerary:
-            car.itinerary.append(floor)
+        # if self._legal_stop(car, floor):
+        #     car.itinerary.append(floor)
 
         reward = self._advance_until_event()      # discrete‑event simulation
         return self._obs(), reward, False, False, self._info()
@@ -86,45 +92,47 @@ class ElevatorEnv(gym.Env):
     # ---------------- simulation core -----------------------------------
     def _advance_until_event(self) -> float:
         """Run until next passenger or door‑closure event, return reward."""
-        while True:
-            # ––– time until next Poisson arrival –––
-            t_pass = self.rng.exponential(1.0 / self.lambda_p)
+        # ––– time until next Poisson arrival –––
+        t_pass = self.rng.exponential(1.0 / self.lambda_p)
 
-            # ––– time until any car event –––
-            t_car = np.inf
-            for car in self.cars:
-                if car.door_open:
-                    t_car = min(t_car, car.t_door)
-                elif car.itinerary:
-                    t_car = min(t_car,
-                                abs(car.itinerary[0] - car.position) * self.sec_floor)
+        # ––– time until any car event –––
+        t_car = np.inf
+        for car in self.cars:
+            if car.door_open:
+                t_car = min(t_car, car.t_door)
+            elif car.itinerary is not None:
+                t_car = min(t_car,
+                            abs(car.itinerary - car.position) * self.sec_floor)
 
-            dt = min(t_pass, t_car)
-            self.time += dt
+        dt = min(t_pass, t_car)
+        self.time += dt
 
-            # move / count down doors
-            for car in self.cars:
-                if car.door_open:
-                    car.t_door -= dt
-                    if car.t_door <= 1e-6:
-                        car.door_open, car.t_door = False, 0.0
-                        return self._reward_snapshot()     # decision point
-                elif car.itinerary:
-                    sign = np.sign(car.itinerary[0] - car.position)
-                    car.position += sign * (dt / self.sec_floor)
-                    car.direction = int(sign)
-                    if abs(car.position - car.itinerary[0]) < 1e-3:
-                        car.position = float(car.itinerary.pop(0))
-                        self._handle_arrival(car)          # open doors
-                        car.door_open, car.t_door = True, self.t_door
-                        return self._reward_snapshot()     # decision point
-                else:
-                    car.direction = 0
+        # move / count down doors
+        for car in self.cars:
+            if car.door_open:
+                car.t_door -= dt
+                if car.t_door <= 1e-6:
+                    car.door_open, car.t_door = False, 0.0
+                    return self._reward_snapshot()     # decision point
+            elif car.itinerary is not None:
+                sign = np.sign(car.itinerary[0] - car.position)
+                car.position += sign * (dt / self.sec_floor)
+                car.direction = int(sign)
+                if abs(car.position - car.itinerary) < 1e-3:
+                    car.position = float(car.itinerary)
+                    car.itinerary = None
+                    self._handle_arrival(car)          # open doors
+                    car.door_open, car.t_door = True, self.t_door
+                    return self._reward_snapshot()     # decision point
+            else:
+                car.direction = 0
 
-            # passenger arrival occurs first
-            if t_pass < t_car:
-                self._spawn_passenger()
-                return self._reward_snapshot()             # decision point
+        # passenger arrival occurs first
+        if t_pass < t_car:
+            self._spawn_passenger()
+            return self._reward_snapshot()             # decision point
+        
+        assert False, "Should never reach here"
 
     # ---------------- boarding/alighting & generator ---------------------
     def _handle_arrival(self, car: Car):
@@ -142,9 +150,9 @@ class ElevatorEnv(gym.Env):
             p.t_board = self.time
             car.passengers.append(p)
             self.waiting.remove(p)
-            if p.destination not in car.itinerary:
-                car.itinerary.append(p.destination)
-        self.hall[floor, :] = 0
+            # if p.destination not in car.itinerary:
+            #     car.itinerary.append(p.destination)
+        self.hall[floor, :] = 0  #! if capacity is limited, should not be like this
 
     def _spawn_passenger(self):
         o = self.rng.integers(0, self.N)
@@ -177,8 +185,8 @@ class ElevatorEnv(gym.Env):
         # car‑call matrix A
         A = np.zeros((self.N, self.M), dtype=int)
         for j, c in enumerate(self.cars):
-            for f in c.itinerary:
-                A[f, j] = 1
+            for p in c.passengers:
+                A[p.destination, j] = 1
         # positions & directions stretched to N×M
         P = np.repeat(np.array([c.position for c in self.cars]).reshape(len(self.cars), 1), self.N, 1).T
         D = np.repeat(np.array([c.direction for c in self.cars]).reshape(len(self.cars), 1), self.N, 1).T
@@ -196,9 +204,15 @@ class ElevatorEnv(gym.Env):
         self.done    : List[Passenger] = []
 
     def _info(self):
+        
         return {"time": self.time,
-                "waiting": len(self.waiting),
-                "in_car": sum(len(c.passengers) for c in self.cars)}
+                "N": self.N,
+                "M": self.M,
+                "cars_itinerary": [c.itinerary for c in self.cars],
+                "cars_direction": [c.direction for c in self.cars],
+                "cars_position": [c.position for c in self.cars],
+                "cars": self.cars,
+                "hall_calls": self.hall}
 
     # ---------------- render --------------------------------------------
     def render(self, mode="human"):
