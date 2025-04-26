@@ -38,7 +38,8 @@ class ElevatorEnv(gym.Env):
     One RL *step* = next passenger event (arrival/board/alight) or
     a car finishing its door cycle — exactly the paper’s definition.
     """
-    metadata = {"render_modes": ["human"]}
+    metadata = {"render_modes": ["human"],  "render_fps": 1}
+    
 
     # ---------------- constructor ---------------------------------------
     def __init__(self,
@@ -59,9 +60,9 @@ class ElevatorEnv(gym.Env):
         self.lambda_p  = passenger_rate
         self.rng       = np.random.default_rng(seed)
 
-        # observation = (N × M × 4) tensor flattened
+        # observation = (N × M × 5) tensor flattened
         self.observation_space = spaces.Box(
-            low=0, high=np.inf, shape=(self.N * self.M * 4,), dtype=np.float32)
+            low=0, high=np.inf, shape=(self.N * self.M * 5,), dtype=np.float32)
         # action = one (floor,car) pair
         self.action_space = spaces.MultiDiscrete([self.N, self.M])
         self._reset_state()
@@ -184,6 +185,7 @@ class ElevatorEnv(gym.Env):
         # print(f"P shape: {P.shape}, D shape: {D.shape}")
         # print(f"B shape: {B.shape}, A shape: {A.shape}")
         stacked = np.stack([B[:, j, :] for j in range(2)] + [A, P, D], 2)
+        # print(f"stacked shape: {stacked.shape}")
         return stacked.astype(np.float32).flatten()
 
     def _reset_state(self):
