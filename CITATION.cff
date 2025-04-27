@@ -1,0 +1,21 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: elevator-gym
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: William
+    family-names: Dan
+    email: william.anze.dan@gmail.com
+    orcid: 'https://orcid.org/0009-0004-3578-7779'
+repository-code: 'https://github.com/william-dan/rl-elevator/'
+abstract: an RL gym environment for elevator dispatch problem
+keywords:
+  - Reinforcement Learning
+  - Elevator Dispatch
+  - Scheduling Algorithm
+license: MIT

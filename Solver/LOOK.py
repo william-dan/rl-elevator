@@ -87,7 +87,8 @@ class LOOKSolver:
             raise ValueError(f"Invalid direction: {direction}")
     
 
-    def select_action(self, obs, info):
+    def get_next_action(self, current_state):
+        obs, info = current_state
         N = info["N"]
         M = info["M"]
         itinerary = info["cars_itinerary"]
@@ -116,7 +117,7 @@ class LOOKSolver:
         total_done = 0
         total_waiting = 0
         for _ in range(max_steps):
-            action = self.select_action(obs, info)
+            action = self.get_next_action((obs, info))
             # print(f"action: {action}")
             obs, reward, done, truncated, info = self.env.step(action)
             
@@ -129,13 +130,25 @@ class LOOKSolver:
         # print(f"info[\"done\"]: {info['done']}")
         return total_reward, total_done, total_waiting
     
+    def benchmark(self, num_episodes=100):
+        rewards = []
+        for _ in range(num_episodes):
+            total_reward, total_done, total_waiting = self.run_episode(max_steps=100)
+            rewards.append(total_reward)
+        return rewards
+    
+    
+    
     def plot(self, rewards):
         import matplotlib.pyplot as plt
+        plt.figure(figsize=(10, 5))
         plt.plot(rewards)
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.title('LOOKSolver Performance')
+        plt.savefig("look_performance.png")
         plt.show()
+        
 
 if __name__ == "__main__":
     env = gym.make("Elevators/Elevators-v0", 
@@ -144,15 +157,6 @@ if __name__ == "__main__":
                    avg_passengers_spawning_time=5)
     solver = LOOKSolver(env)
     rewards = []
-    dones = []
-    waitings = []
-    for _ in range(100):
-        total_reward, total_done, total_waiting = solver.run_episode(max_steps=100)
-        rewards.append(total_reward)
-        dones.append(total_done)
-        waitings.append(total_waiting)
-    print(f"mean done: {np.mean(dones)}")
-    print(f"mean waiting: {np.mean(waitings)}")
-
+    rewards = solver.benchmark(num_episodes=100)
     print(f"mean reward: {np.mean(rewards)}")
     solver.plot(rewards)

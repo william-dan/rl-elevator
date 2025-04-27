@@ -1,7 +1,9 @@
 import gymnasium as gym
 from collections import deque
+from BaseSolver import BaseSolver
+import matplotlib.pyplot as plt
 
-class FIFOSolver:
+class FIFOSolver(BaseSolver):
     def __init__(self, env: gym.Env):
         self.env = env
         self.queue = deque()
@@ -9,7 +11,7 @@ class FIFOSolver:
     def reset(self):
         self.queue.clear()
 
-    def select_action(self, info):
+    def get_next_action(self, info):
         diff = info['hall_calls'] - self.prev_hall_calls
         self.prev_hall_calls = info['hall_calls'].copy()
         new_requests = [i for i in range(len(diff)) if diff[i][0] > 0 or diff[i][1] > 0]
@@ -37,7 +39,7 @@ class FIFOSolver:
         self.prev_hall_calls = info['hall_calls'].copy()
         total_reward = 0
         for _ in range(max_steps):
-            action = self.select_action(info)
+            action = self.get_next_action(info)
             obs, reward, done, truncated, info = self.env.step(action)
             total_reward += reward
             if done or truncated:
@@ -46,20 +48,27 @@ class FIFOSolver:
         return total_reward
     
     def plot(self, rewards):
-        import matplotlib.pyplot as plt
+        plt.figure(figsize=(10, 5))
         plt.plot(rewards)
         plt.xlabel('Episode')
         plt.ylabel('Total Reward')
         plt.title('FIFOSolver Performance')
+        plt.savefig("fifo_performance.png")
         plt.show()
+        
+        
+        
+    def benchmark(self, num_episodes=100):
+        rewards = []
+        for _ in range(num_episodes):
+            total_reward = self.run_episode(max_steps=100)
+            rewards.append(total_reward)
+        return rewards
 
 if __name__ == "__main__":
     import Elevators
     env = gym.make("Elevators/Elevators-v0", num_floors=20, num_cars=4, avg_passengers_spawning_time=5)
     solver = FIFOSolver(env)
-    rewards = []
-    for _ in range(100):
-        total_reward = solver.run_episode(max_steps=100)
-        rewards.append(total_reward)
-    print(f"Average reward: {sum(rewards)/len(rewards)}")
+    rewards = solver.benchmark(num_episodes=100)
+    print(f"Average reward: {sum(rewards) / len(rewards)}")
     solver.plot(rewards)
