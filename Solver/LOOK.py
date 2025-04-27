@@ -1,6 +1,7 @@
 import gymnasium as gym
 import Elevators
 from collections import deque
+import numpy as np
 
 import Elevators.envs
 import Elevators.envs.simple_elevators
@@ -9,94 +10,124 @@ class LOOKSolver:
     def __init__(self, env: gym.Env):
         self.env = env
         
-
+    def _upper_call(self, upper_calls_per_car, car_pos):
+        for i in range(car_pos+1, len(upper_calls_per_car)):
+            if upper_calls_per_car[i] > 0:
+                return i
+        return None
     
-    def _idle_action(self, calls, info, cars_pos):
-        # print(f"calls: {calls}")
-        # print(f"cars_pos: {cars_pos}")
+    def _lower_call(self, lower_calls_per_car, car_pos):
+        for i in range(car_pos-1, -1, -1):
+            if lower_calls_per_car[i] > 0:
+                return i
+        return None
+
+    def _call(self, calls):
+        for i in range(len(calls)):
+            if calls[i][0] > 0 or calls[i][1] > 0:
+                return i
+        return None
+    
+    def _direction(self, info, car_idx):
+        
+        return info["cars"][car_idx].direction
+
+    def _idle_car_idx(self, info):
         idle_cars: list[int] = info["idle_cars"]
         if len(idle_cars) == 0:
+            return None
+        return idle_cars[0]
+    
+    def _idle_action(self, calls, info, cars_pos):
+        idle_car_idx = self._idle_car_idx(info)
+        if idle_car_idx is None:
             return (info["N"], 0)
-        assert len(idle_cars) > 0, "idle cars must be > 0"
-        idle_car_idx = idle_cars[0]
-        if self.directions[idle_car_idx] == 1:
-            # print(cars_pos)
-            # cars_pos[idle_car_idx]
-            upper_calls = calls[:,idle_car_idx, 0]
-            if upper_calls.sum() > 0:
-                for i in range(cars_pos[idle_car_idx], len(upper_calls)):
-                    if upper_calls[i] > 0:
-                        return (i, idle_car_idx)
-            else:
+        
+        # print(f"calls: {calls}")
+        upper_call = self._upper_call(calls[:,idle_car_idx, 0], cars_pos[idle_car_idx])
+        lower_call = self._lower_call(calls[:,idle_car_idx, 1], cars_pos[idle_car_idx])
+        call = self._call(calls[:,idle_car_idx, :])
+        direction = self.directions[idle_car_idx]
+        # print(f"upper_call: {upper_call}, lower_call: {lower_call}, call: {call}, direction: {direction}")
+        
+        
+        if direction == 1:
+            
+            if upper_call is not None:
+                return (upper_call, idle_car_idx)
+            elif lower_call is not None:
                 self.directions[idle_car_idx] = -1
-                lower_calls = calls[:,idle_car_idx, 1]
-                if lower_calls.sum() > 0:
-                    for i in range(cars_pos[idle_car_idx], -1, -1):
-                        if lower_calls[i] > 0:
-                            return (i, idle_car_idx)
-                    
-        else:
-            lower_calls = calls[:,idle_car_idx, 1]
-            if lower_calls.sum() > 0:
-                for i in range(cars_pos[idle_car_idx], -1, -1):
-                    if lower_calls[i] > 0:
-                        return (i, idle_car_idx)
-                
+                return (lower_call, idle_car_idx)
+            elif call is not None:
+                self.directions[idle_car_idx] = np.sign(call - cars_pos[idle_car_idx])
+                return (call, idle_car_idx)
             else:
+                return (info["N"], 0)
+                    
+        elif direction == -1:
+            if lower_call is not None:
+                return (lower_call, idle_car_idx)
+            elif upper_call is not None:
                 self.directions[idle_car_idx] = 1
-                upper_calls = calls[:,idle_car_idx, 0]
-                if upper_calls.sum() > 0:
-                    for i in range(cars_pos[idle_car_idx], len(upper_calls)):
-                        if upper_calls[i] > 0:
-                            return (i, idle_car_idx)
-        return (info["N"], 0)  # No action if no requests
+                return (upper_call, idle_car_idx)
+            elif call is not None:
+                self.directions[idle_car_idx] = np.sign(call - cars_pos[idle_car_idx])
+                return (call, idle_car_idx)
+            else:
+                return (info["N"], 0)
+        
+        elif direction == 0:
+            if call is not None:
+                self.directions[idle_car_idx] = np.sign(call - cars_pos[idle_car_idx])
+                return (call, idle_car_idx)
+            else:
+                return (info["N"], 0)
+
+        else:
+            raise ValueError(f"Invalid direction: {direction}")
+    
 
     def select_action(self, obs, info):
         N = info["N"]
         M = info["M"]
-        event = info["event"]
         itinerary = info["cars_itinerary"]
     
         cars_calls = obs[:,:,2].reshape(N, M, 1)
         hall_calls = obs[:,:,0:2]
         for i in range(M):
             if itinerary[i] is not None:
-                print(f"itinerary[i]: {itinerary[i]}")
+                # print(f"itinerary[i]: {itinerary[i]}")
                 hall_calls[itinerary[i],:,:] = 0
             
         cars_pos = obs[0,:,3].astype(int)
         
-        
         calls = cars_calls + hall_calls
         
-        if event == Elevators.envs.simple_elevators.Event.CAR_DOOR_OPEN:
-            return (info["N"], 0)  # No action if no requests
-        elif event == Elevators.envs.simple_elevators.Event.CAR_DOOR_CLOSE:
-            return self._idle_action(calls, info, cars_pos)
-            
-        elif event == Elevators.envs.simple_elevators.Event.SPAWN_PASSENGER:
-            return self._idle_action(calls, info, cars_pos)       
-            
-        return (info["N"], 0)  # No action if no requests
+        return self._idle_action(calls, info, cars_pos)
+       
         
 
     def run_episode(self, max_steps=20):
         obs, info = self.env.reset()
-        self.directions = [1 for _ in range(info["M"])]
+        self.directions = [0 for _ in range(info["M"])]
         
         
         total_reward = 0
+        total_done = 0
+        total_waiting = 0
         for _ in range(max_steps):
             action = self.select_action(obs, info)
-            print(f"action: {action}")
+            # print(f"action: {action}")
             obs, reward, done, truncated, info = self.env.step(action)
             
             total_reward += reward
-            env.render()
+            total_done = info["done"]
+            total_waiting = info["waiting"]
+            # env.render()
             if done or truncated:
                 break
-        print(f"info[\"done\"]: {info['done']}")
-        return total_reward
+        # print(f"info[\"done\"]: {info['done']}")
+        return total_reward, total_done, total_waiting
     
     def plot(self, rewards):
         import matplotlib.pyplot as plt
@@ -107,10 +138,21 @@ class LOOKSolver:
         plt.show()
 
 if __name__ == "__main__":
-    env = gym.make("Elevators/Elevators-v0", num_floors=20, num_cars=4)
+    env = gym.make("Elevators/Elevators-v0", 
+                   num_floors=20, 
+                   num_cars=4, 
+                   avg_passengers_spawning_time=5)
     solver = LOOKSolver(env)
     rewards = []
-    for _ in range(1):
-        total_reward = solver.run_episode(max_steps=20)
+    dones = []
+    waitings = []
+    for _ in range(100):
+        total_reward, total_done, total_waiting = solver.run_episode(max_steps=100)
         rewards.append(total_reward)
+        dones.append(total_done)
+        waitings.append(total_waiting)
+    print(f"mean done: {np.mean(dones)}")
+    print(f"mean waiting: {np.mean(waitings)}")
+
+    print(f"mean reward: {np.mean(rewards)}")
     solver.plot(rewards)

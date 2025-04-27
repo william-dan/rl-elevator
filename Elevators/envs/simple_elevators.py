@@ -61,7 +61,6 @@ class ElevatorEnv(gym.Env):
                  floor_h_m:  float = 3.5,
                  door_time:  float = 2.0,
                  avg_passengers_spawning_time: float = 50.0,
-                #  passenger_rate: float = 0.2,    # λ (Poisson) per second
                  max_passengers_at_a_time: int = 10,
                  avg_passengers_at_a_time: float = 5.0,
                  seed: int | None = None):
@@ -145,7 +144,7 @@ class ElevatorEnv(gym.Env):
                 if abs(car.position - car.itinerary) < 1e-3:
                     car.position = float(car.itinerary)
                     car.itinerary = None
-                    self._handle_arrival(car)         
+                    self._handle_arrival(car, car.direction)         
                     car.door_open, car.t_door = True, self.t_door
                     # assert is_end is False
                     is_end = True
@@ -165,7 +164,7 @@ class ElevatorEnv(gym.Env):
         return self._reward_snapshot(), end_reason
 
     # ---------------- boarding/alighting & generator ---------------------
-    def _handle_arrival(self, car: Car):
+    def _handle_arrival(self, car: Car, prev_direction: int):
         # print(f"car arrived at floor {car.position}")
         floor = int(car.position)
         # alight
@@ -175,7 +174,11 @@ class ElevatorEnv(gym.Env):
                 self.done.append(p)
                 car.passengers.remove(p)
         # board
-        waiting_here = [p for p in self.waiting if p.origin == floor]
+        
+        if prev_direction == 0:  # idle
+            prev_direction = self.rng.choice([-1, 1])
+        waiting_here = [p for p in self.waiting if p.origin == floor and prev_direction * (p.destination - floor) > 0]
+        car.direction = 0
         # space = self.cap - len(car.passengers) #!!!!!!!!!!!!!
         # for p in waiting_here[:space]:
         for p in waiting_here:
@@ -184,8 +187,9 @@ class ElevatorEnv(gym.Env):
             self.waiting.remove(p)
             # if p.destination not in car.itinerary:
             #     car.itinerary.append(p.destination)
-        self.hall[floor, :] = 0  #! if capacity is limited, should not be like this
-
+        self.hall[floor, 0 if prev_direction == 1 else 1] = 0  #! if capacity is limited, should not be like this
+        # print(f"hall_calls: {self.hall}")
+        
     def _spawn_passenger(self):
         n_passengers = self.rng.exponential(scale=self.avg_passengers_at_a_time) + 1
         o = self.rng.integers(0, self.N)
@@ -251,8 +255,8 @@ class ElevatorEnv(gym.Env):
                 "cars_position": [c.position for c in self.cars],
                 "cars": self.cars,
                 "hall_calls": self.hall,
-                "event": self.current_event,
                 "idle_cars": self._find_idle_cars(),
+                "waiting": len(self.waiting),
                 "done": len(self.done),
                 }
     

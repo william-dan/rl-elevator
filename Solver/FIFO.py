@@ -42,6 +42,7 @@ class FIFOSolver:
             total_reward += reward
             if done or truncated:
                 break
+        # print(f"info[\"done\"]: {info['done']}")
         return total_reward
     
     def plot(self, rewards):
@@ -54,10 +55,11 @@ class FIFOSolver:
 
 if __name__ == "__main__":
     import Elevators
-    env = gym.make("Elevators/Elevators-v0", num_floors=20, num_cars=4)
+    env = gym.make("Elevators/Elevators-v0", num_floors=20, num_cars=4, avg_passengers_spawning_time=5)
     solver = FIFOSolver(env)
     rewards = []
-    for _ in range(10):
+    for _ in range(100):
         total_reward = solver.run_episode(max_steps=100)
         rewards.append(total_reward)
+    print(f"Average reward: {sum(rewards)/len(rewards)}")
     solver.plot(rewards)
