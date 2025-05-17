@@ -8,10 +8,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
-gymnasium = "*"
-
-[tool.poetry.group.dev.dependencies]   # Development-only extras
-pre-commit = "*"
+gymnasium = "1.1.1"
+numpy = "1.24.3"
 
 [build-system]
 requires = ["poetry-core"]
