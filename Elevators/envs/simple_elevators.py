@@ -220,6 +220,9 @@ class ElevatorEnv(gym.Env):
 
         # --------------------------------------------------------------
         dt = min(self.t_passenger_arrival, t_car_next + self.time) - self.time
+        if dt is np.inf:
+            # No events to process
+            return self._reward_snapshot(), None
         self.time += dt
 
         event_fired: Optional[Event] = None
@@ -274,6 +277,7 @@ class ElevatorEnv(gym.Env):
                 p.t_alight = self.time
                 self.done.append(p)
                 car.passengers.remove(p)
+                self.arrival_reward += 2
                 is_changed = True
 
         # ---------------- board -------------------------------------------------
@@ -335,9 +339,10 @@ class ElevatorEnv(gym.Env):
             for p in car.passengers:
                 if p.t_board is not None:
                     r += self.time - p.t_board
-       
+        reward = -(w + r) * 1e-3 + self.arrival_reward
+        self.arrival_reward = 0.0
         # print(f"reward: {-(w + r) * 1e-3:.2f}, w = {w:.2f}, r = {r:.2f}")
-        return -(w + r) * 1e-3
+        return reward
 
     # ------------------------------------------------------------------
 
@@ -426,7 +431,7 @@ class ElevatorEnv(gym.Env):
         self.waiting: List[Passenger] = []
         self.done: List[Passenger] = []
         self.current_event: Optional[Event] = None
-
+        self.arrival_reward: float = 0.0
 
         self.current_passengers: int = self.total_passengers
         self.t_passenger_arrival: Optional[float] = np.inf
