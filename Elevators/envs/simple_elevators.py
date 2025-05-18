@@ -1,308 +1,433 @@
-"""
-Elevator group‑control Gymnasium environment.
-Implements the discrete‑event simulator from:
+from __future__ import annotations
+
+"""Elevator Group‑Control Gymnasium Environment
+------------------------------------------------
+A discrete‑event elevator simulator based on:
 
     Wei et al., "Optimal Elevator Group Control via Deep Asynchronous
-    Actor–Critic Learning", IEEE TNNLS 31 (12): 5245‑5256 (2020)
+    Actor–Critic Learning", IEEE TNNLS 31 (12): 5245‑5256 (2020).
+
+Key design choices
+~~~~~~~~~~~~~~~~~~
+* **Event‑driven time‑step** – Each *gym.step* advances to the next
+  passenger/event as in the paper.  This makes the reward signal time‑
+  homogeneous and avoids the need for arbitrary frame‑skips.
+* **Tensor observation** – `obs[floor, car, channel]`, where the five
+  stacked channels are   
+  `B_↑`, `B_↓` (replicated hall‑calls, truncated by car direction),
+  `A` (car‑calls), car **P**osition and **D**irection.
+* **Capacity support** – Cars now enforce their `capacity`, boarding at
+  most the available free slots.
+
+This file is self‑contained – import it and register the environment via
+`gymnasium.make("ElevatorEnv-v0")` if desired.
 """
 
-from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Tuple, Any
+from enum import Enum
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
-from enum import Enum
 
-# ───────────────── data classes ──────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+# Domain objects
+# ────────────────────────────────────────────────────────────────────────────────
+
+
+class Event(Enum):
+    """Discrete events handled by the simulator."""
+
+    CAR_DOOR_CLOSE = 0
+    CAR_DOOR_OPEN = 1
+    SPAWN_PASSENGER = 2
+
+
 @dataclass
 class Passenger:
+    """State for a single passenger."""
+
     origin: int
     destination: int
     t_request: float
     t_board: Optional[float] = None
     t_alight: Optional[float] = None
+    
+    def __repr__(self) -> str:  # pragma: no cover – debug aid only
+        return (
+            "Passenger({o}→{d}, t={t:.2f})".format(
+                o=self.origin,
+                d=self.destination,
+                t=self.t_request,
+            )
+        )
+
 
 @dataclass
 class Car:
+    """Elevator car state."""
+
     capacity: int
-    position: float = 0.0          # continuous (floors)
-    direction: int  = 0            # −1, 0, +1
+    position: float = 0.0  # Continuous floor index (can be between floors)
+    direction: int = 0  # −1, 0, +1
     door_open: bool = False
-    t_door: float   = 0.0          # time until door state change
+    t_door: float = 0.0  # Seconds until the current door cycle completes
     passengers: List[Passenger] = field(default_factory=list)
-    # itinerary:  List[int] = field(default_factory=list)
-    """
-    itinerary can be changed at any time.
-    """
-    itinerary: int = None
+    itinerary: Optional[int] = None  # Next floor target (``None`` → idle)
 
-class Event(Enum):
-    CAR_DOOR_CLOSE = 0
-    CAR_DOOR_OPEN  = 1
-    SPAWN_PASSENGER = 2
+    # ---------------------------------------------------------------------
+    # Convenience helpers
+    # ---------------------------------------------------------------------
+
+    @property
+    def remaining_capacity(self) -> int:
+        """Return how many additional passengers *could* board."""
+
+        if np.isinf(self.capacity):
+            # Treat *inf* as an arbitrarily large integer to avoid spills in
+            # list slicing logic downstream.
+            return int(1e9)
+        return max(self.capacity - len(self.passengers), 0)
+
+    def __repr__(self) -> str:  # pragma: no cover – debug aid only
+        return (
+            "Car(pos={p:.2f}, dir={d:+d}, load={l}, it={it})".format(
+                p=self.position,
+                d=self.direction,
+                l=len(self.passengers),
+                it=self.itinerary,
+            )
+        )
 
 
-# ───────────────── environment ──────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────────
+# Environment
+# ────────────────────────────────────────────────────────────────────────────────
+
+
 class ElevatorEnv(gym.Env):
-    """
-    One RL *step* = next passenger event (arrival/board/alight) or
-    a car finishing its door cycle — exactly the paper’s definition.
-    """
-    metadata = {"render_modes": ["human"],  "render_fps": 1}
-    
+    """Multi‑car elevator control environment (discrete‑event)."""
 
-    # ---------------- constructor ---------------------------------------
-    def __init__(self,
-                 num_floors: int = 10,
-                 num_cars:   int = 4,
-                 capacity:   int = np.inf,      # for simplicity
-                 speed_m_s:  float = 1.5,
-                 floor_h_m:  float = 3.5,
-                 door_time:  float = 2.0,
-                 avg_passengers_spawning_time: float = 50.0,
-                 max_passengers_at_a_time: int = 10,
-                 avg_passengers_at_a_time: float = 5.0,
-                 seed: int | None = None):
+    metadata = {"render_modes": ["human"], "render_fps": 1}
 
-        self.N, self.M = num_floors, num_cars
-        self.cap       = capacity
-        self.v         = speed_m_s
-        self.sec_floor = floor_h_m / speed_m_s
-        # print(f"sec_floor: {self.sec_floor}")
-        self.t_door    = door_time
-        # self.lambda_p  = passenger_rate
-        self.avg_passengers_spawning_time = avg_passengers_spawning_time
-        self.rng       = np.random.default_rng(seed)
-        self.max_passengers_at_a_time = max_passengers_at_a_time
-        self.avg_passengers_at_a_time = avg_passengers_at_a_time
-        # observation = (N × M × 5) tensor flattened
+    # ---------------------------------------------------------------------
+    # Construction helpers
+    # ---------------------------------------------------------------------
+
+    def __init__(
+        self,
+        *,
+        num_floors: int = 10,
+        num_cars: int = 4,
+        capacity: int | float = np.inf,  # ∞ → unlimited
+        speed_m_s: float = 1.5,
+        floor_h_m: float = 3.5,
+        door_time: float = 2.0,
+        avg_passengers_spawning_time: float = 50.0,
+        max_passengers_at_a_time: int = 10,
+        avg_passengers_at_a_time: float = 5.0,
+        total_passengers: int = 10,
+        seed: int | None = None,
+    ) -> None:
+        super().__init__()
+
+        # ---------------- static parameters ------------------------------
+        self.N: int = num_floors
+        self.M: int = num_cars
+        self.cap: float = capacity
+        self.v: float = speed_m_s
+        self.t_floor: float = floor_h_m / speed_m_s  # s / floor
+        self.t_door_cycle: float = door_time  # s for a full open/close cycle
+
+        self.avg_t_passenger: float = avg_passengers_spawning_time
+        self.max_pax_batch: int = max_passengers_at_a_time
+        self.avg_pax_batch: float = avg_passengers_at_a_time
+        self.current_passengers: int = total_passengers
+        self.total_passengers: int = total_passengers
+        # ---------------- PRNG ------------------------------
+        self.rng = np.random.default_rng(seed)
+
+        # ---------------- Gym spaces ------------------------------
+        # Observation: (floor, car, channel) – see module docstring
         self.observation_space = spaces.Box(
-            low=0, high=np.inf, shape=(self.N, self.M, 5,), dtype=np.float32)
-        # action = one (floor,car) pair, add one for idle
+            low=0, high=np.inf, shape=(self.N, self.M, 5), dtype=np.float32
+        )
+        # Action: choose (floor, car) or `floor == N` → *do nothing*
         self.action_space = spaces.MultiDiscrete([self.N + 1, self.M])
+
+        # ---------------- dynamic state ------------------------------
         self._reset_state()
 
-    # ---------------- Gymnasium API -------------------------------------
-    def reset(self, *, seed=None, options=None):
+    # ────────────────────────────────────────────────────────────────────
+    # Gym API
+    # ────────────────────────────────────────────────────────────────────
+
+    def reset(self, *, seed: int | None = None, options: Optional[dict] = None):
         super().reset(seed=seed)
         self._reset_state()
         return self._obs(), self._info()
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(
+        self, action: Sequence[int]
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        num_passengers_in_car = sum(
+            len(c.passengers) for c in self.cars
+        )
+        num_passengers_in_hall = len(self.waiting)
+        if num_passengers_in_car == 0 and num_passengers_in_hall == 0 and self.current_passengers == 0:
+            return self._obs(), 0.0, True, False, self._info()
+        
         floor, car_idx = action
         car = self.cars[car_idx]
-        if floor != self.N:  # idle
-            car.itinerary = floor
-        # schedule if legal
-        # if self._legal_stop(car, floor):
-        #     car.itinerary.append(floor)
 
-        reward, event = self._advance_until_event()      # discrete‑event simulation
+        if floor != self.N:  # *N* is the sentinel for "stay idle"
+            car.itinerary = floor
+
+        reward, event = self._advance_until_event()
         self.current_event = event
+        # if len(self.done) > 0:
+            # print(f"done:", self.done)
+            
         return self._obs(), reward, False, False, self._info()
 
-    # ---------------- simulation core -----------------------------------
-    
-    def _advance_until_event(self) -> float:
-        """Run until next passenger or door‑closure event, return reward."""
+    # ────────────────────────────────────────────────────────────────────
+    # Core simulation loop (discrete event)
+    # ────────────────────────────────────────────────────────────────────
+
+    def _advance_until_event(self) -> Tuple[float, Event]:
+        """Simulate forward to the *next* event and return its reward + type."""
+
         self.new_request_this_step = None
         self.current_event = None
-        
-        # ––– time until next Poisson arrival –––
-        if self.t_pass is None:
-            self.t_pass = self.rng.exponential(self.avg_passengers_spawning_time) + self.time
-        
 
-        # ––– time until any car event –––
-        t_car = np.inf
+        # --- next Poisson arrival (absolute time) ----------------------
+        if self.t_passenger_arrival is np.inf and self.current_passengers > 0:
+            self.t_passenger_arrival = (
+                self.rng.exponential(self.avg_t_passenger) + self.time
+            )
+
+        # --- next car event (relative time) ---------------------------
+        t_car_next: float = np.inf  # relative seconds until any car event
         for car in self.cars:
             if car.door_open:
-                t_car = min(t_car, car.t_door)
+                t_car_next = min(t_car_next, car.t_door)
             elif car.itinerary is not None:
-                t_car = min(t_car,
-                            abs(car.itinerary - car.position) * self.sec_floor)
+                t_car_next = min(
+                    t_car_next,
+                    abs(car.itinerary - car.position) * self.t_floor,
+                )
 
-        dt = min(self.t_pass, t_car + self.time) - self.time
+        # --------------------------------------------------------------
+        dt = min(self.t_passenger_arrival, t_car_next + self.time) - self.time
         self.time += dt
 
-        is_end = False
-        end_reason = None
-        # move / count down doors
+        event_fired: Optional[Event] = None
+
+        # ---------------- update car states ---------------------------
         for car in self.cars:
             if car.door_open:
+                # Countdown door timer
                 car.t_door -= dt
-                if car.t_door <= 1e-6:
-                    car.door_open, car.t_door = False, 0.0
-                    # assert is_end is False
-                    is_end = True
-                    end_reason = Event.CAR_DOOR_CLOSE
+                if car.t_door <= 1e-6:  # door now closes
+                    car.door_open = False
+                    car.t_door = 0.0
+                    event_fired = Event.CAR_DOOR_CLOSE
             elif car.itinerary is not None:
+                # Progress towards next stop
                 sign = np.sign(car.itinerary - car.position)
-                car.position += sign * (dt / self.sec_floor)
+                car.position += sign * (dt / self.t_floor)
                 car.direction = int(sign)
                 if abs(car.position - car.itinerary) < 1e-3:
+                    # Arrived exactly – snap to floor
                     car.position = float(car.itinerary)
+                    is_changed = self._handle_arrival(car, previous_direction=car.direction)
                     car.itinerary = None
-                    self._handle_arrival(car, car.direction)         
-                    car.door_open, car.t_door = True, self.t_door
-                    # assert is_end is False
-                    is_end = True
-                    end_reason = Event.CAR_DOOR_OPEN
+                        
+                    car.door_open, car.t_door = True, self.t_door_cycle
+                    event_fired = Event.CAR_DOOR_OPEN
             else:
-                car.direction = 0
+                car.direction = 0  # Idle
 
-        # passenger arrival occurs first
-        if abs(self.t_pass - self.time) < 1e-3:
+        # ---------------- passenger arrival (overrides) --------------
+        if abs(self.t_passenger_arrival - self.time) < 1e-3:
             self._spawn_passenger()
-            self.t_pass = None
-            # assert is_end is False
-            is_end = True
-            end_reason = Event.SPAWN_PASSENGER
+            self.t_passenger_arrival = np.inf
+            event_fired = Event.SPAWN_PASSENGER
 
-        assert is_end is True, "is_end should be True"
-        return self._reward_snapshot(), end_reason
+        # assert event_fired is not None, "At least one event must fire each step"
+        return self._reward_snapshot(), event_fired
 
-    # ---------------- boarding/alighting & generator ---------------------
-    def _handle_arrival(self, car: Car, prev_direction: int):
-        # print(f"car arrived at floor {car.position}")
+    # ────────────────────────────────────────────────────────────────────
+    # Passenger handling helpers
+    # ────────────────────────────────────────────────────────────────────
+
+    def _handle_arrival(self, car: Car, *, previous_direction: int) -> None:
+        """Handle boarding/alighting when *car* reaches a floor."""
+
         floor = int(car.position)
-        # alight
+        is_changed = False
+        # ---------------- alight ------------------------------------------------
         for p in list(car.passengers):
+            # print(p)
             if p.destination == floor:
                 p.t_alight = self.time
                 self.done.append(p)
                 car.passengers.remove(p)
-        # board
-        
-        if prev_direction == 0:  # idle
-            prev_direction = self.rng.choice([-1, 1])
-        waiting_here = [p for p in self.waiting if p.origin == floor and prev_direction * (p.destination - floor) > 0]
-        car.direction = 0
-        # space = self.cap - len(car.passengers) #!!!!!!!!!!!!!
-        # for p in waiting_here[:space]:
-        for p in waiting_here:
+                is_changed = True
+
+        # ---------------- board -------------------------------------------------
+        # Choose the direction the idle car *will* take – random tie‑break.
+        if previous_direction == 0:
+            previous_direction = int(self.rng.choice([-1, 1]))
+
+        waiting_same_dir = [
+            p
+            for p in self.waiting
+            if p.origin == floor and previous_direction * (p.destination - floor) > 0
+        ]
+
+        boardable = waiting_same_dir[: car.remaining_capacity]
+        for p in boardable:
             p.t_board = self.time
             car.passengers.append(p)
             self.waiting.remove(p)
-            # if p.destination not in car.itinerary:
-            #     car.itinerary.append(p.destination)
-        self.hall[floor, 0 if prev_direction == 1 else 1] = 0  #! if capacity is limited, should not be like this
-        # print(f"hall_calls: {self.hall}")
+            is_changed = True
+
+        still_waiting = len(waiting_same_dir) > len(boardable)
+        # if still_waiting:
+            # print("Still waiting passengers:", waiting_same_dir)
+        dir_col = 0 if previous_direction == 1 else 1
+        self.hall[floor, dir_col] = int(still_waiting)
         
-    def _spawn_passenger(self):
-        n_passengers = self.rng.exponential(scale=self.avg_passengers_at_a_time) + 1
-        o = self.rng.integers(0, self.N)
-        for i in range(int(n_passengers)):
-            d = self.rng.choice([f for f in range(self.N) if f != o])
-            self.waiting.append(Passenger(o, d, self.time))
-            self.new_request_this_step = o
-            self.hall[o, 0 if d > o else 1] |= 1
+        return is_changed
 
-    # ---------------- reward --------------------------------------------
-    def _reward_snapshot(self): 
-        w = sum((self.time - p.t_request) for p in self.waiting)
-        r = sum((self.time - p.t_board)
-                for car in self.cars for p in car.passengers if p.t_board)
-        return -(w + r) * 1e-3 
+    # ------------------------------------------------------------------
 
-    # ---------------- utils ---------------------------------------------
-    def _legal_stop(self, car: Car, floor: int) -> bool:
-        if car.direction == 0:                     # idle
-            return True
-        return (car.direction > 0 and floor >= car.position) or \
-               (car.direction < 0 and floor <= car.position)
+    def _spawn_passenger(self) -> None:
+        """Generate a batch of new passengers (Poisson + exponential sizes)."""
 
-    def _obs(self):
-        # replicate & truncate hall‑calls -> B̄
+        n_new = int(self.rng.exponential(self.avg_pax_batch) + 1)
+        n_new = min(n_new, self.max_pax_batch)
+        n_new = min(n_new, self.current_passengers)
+        self.current_passengers -= n_new
+        assert n_new > 0, "No new passengers to spawn"
+        origin = self.rng.integers(0, self.N)
+        for _ in range(n_new):
+            destination = self.rng.choice([f for f in range(self.N) if f != origin])
+            self.waiting.append(Passenger(origin, destination, self.time))
+            self.new_request_this_step = origin
+            self.hall[origin, 0 if destination > origin else 1] = 1
+
+    # ────────────────────────────────────────────────────────────────────
+    # Reward & observation utilities
+    # ────────────────────────────────────────────────────────────────────
+
+    def _reward_snapshot(self) -> float:
+        """Negative waiting + riding time (scaled)."""
+        w = 0.0
+        for p in self.waiting:
+            if p.t_request is not None:
+                w += self.time - p.t_request
+    
+        r = 0.0
+        for car in self.cars:
+            for p in car.passengers:
+                if p.t_board is not None:
+                    r += self.time - p.t_board
+       
+        # print(f"reward: {-(w + r) * 1e-3:.2f}, w = {w:.2f}, r = {r:.2f}")
+        return -(w + r) * 1e-3
+
+    # ------------------------------------------------------------------
+
+    def _obs(self) -> np.ndarray:
+        """Return the 3‑D tensor observation described in the docstring."""
+
+        # Replicate hall calls per car and truncate against their direction
         B = np.repeat(self.hall.reshape(self.N, 2, 1), self.M, axis=2)
         for j, c in enumerate(self.cars):
             if c.direction > 0:
-                B[: int(c.position), :, j] = 0
+                B[: int(c.position), :, j] = 0  # below
             elif c.direction < 0:
-                B[int(c.position)+1 :, :, j] = 0
-        # car‑call matrix A
+                B[int(c.position) + 1 :, :, j] = 0  # above
+
+        # Car‑calls (destinations)
         A = np.zeros((self.N, self.M), dtype=int)
         for j, c in enumerate(self.cars):
             for p in c.passengers:
                 A[p.destination, j] = 1
-        # positions & directions stretched to N×M
-        # print(f"cars: {[c.position for c in self.cars]}")
-        P = np.repeat(np.array([c.position for c in self.cars]).reshape(len(self.cars), 1), self.N, 1).T
-        D = np.repeat(np.array([c.direction for c in self.cars]).reshape(len(self.cars), 1), self.N, 1).T
-        # print(f"P shape: {P.shape}, D shape: {D.shape}")
-        # print(f"B shape: {B.shape}, A shape: {A.shape}")
-        stacked = np.stack([B[:, j, :] for j in range(2)] + [A, P, D], 2)
-        # print(f"stacked shape: {stacked.shape}")
+
+        # Position & direction broadcast to N × M
+        P = np.repeat(
+            np.array([c.position for c in self.cars]).reshape(self.M, 1), self.N, 1
+        ).T
+        D = np.repeat(
+            np.array([c.direction for c in self.cars]).reshape(self.M, 1), self.N, 1
+        ).T
+
+        stacked = np.stack([B[:, k, :] for k in range(2)] + [A, P, D], axis=2)
         return stacked.astype(np.float32)
 
-    def _reset_state(self):
-        self.time = 0.0
-        self.cars    = [Car(self.cap) for _ in range(self.M)]
-        self.hall    = np.zeros((self.N, 2), int)   # hall‑call counts
-        self.waiting : List[Passenger] = []
-        self.done    : List[Passenger] = []
-        self.current_event = None
-        self.t_pass = None
+    # ------------------------------------------------------------------
 
-    def _info(self):
-        
-        return {"time": self.time,
-                "N": self.N,
-                "M": self.M,
-                "cars_itinerary": [c.itinerary for c in self.cars],
-                "cars_direction": [c.direction for c in self.cars],
-                "cars_position": [c.position for c in self.cars],
-                "cars": self.cars,
-                "hall_calls": self.hall,
-                "idle_cars": self._find_idle_cars(),
-                "waiting": len(self.waiting),
-                "done": len(self.done),
-                }
-    
-    # ---------------- utils -------------------------------------
-    def _find_new_requests(self):
-        return self.new_request_this_step
-    
-    def _find_idle_cars(self):
-        idle_cars = []
-        for i, car in enumerate(self.cars):
-            if car.itinerary is None:
-                idle_cars.append(i)
-        return idle_cars
-    
-    def _find_cars_with_itinerary(self):
-        cars_with_itinerary = []
-        for i, car in enumerate(self.cars):
-            if car.itinerary is not None:
-                cars_with_itinerary.append(i)
-        return cars_with_itinerary
+    def _info(self) -> Dict[str, Any]:
+        return {
+            "time": self.time,
+            "waiting": len(self.waiting),
+            "done": len(self.done),
+            "hall_calls": self.hall.copy(),
+            "cars": self.cars.copy(),
+            "idle_cars": self._find_idle_cars(),
+            "M": self.M,
+            "N": self.N,
+            "cars_itinerary": [c.itinerary for c in self.cars],
+        }
 
-    def _find_cars_with_passengers(self):
-        cars_with_passengers = []
-        for i, car in enumerate(self.cars):
-            if len(car.passengers) > 0:
-                cars_with_passengers.append(i)
-        return cars_with_passengers
+    # ────────────────────────────────────────────────────────────────────
+    # State helpers (public)
+    # ────────────────────────────────────────────────────────────────────
 
+    def _find_idle_cars(self) -> List[int]:
+        return [i for i, c in enumerate(self.cars) if c.itinerary is None]
 
-    # ---------------- render --------------------------------------------
-    def render(self, mode="human"):
+    # ------------------------------------------------------------------
+
+    def render(self, mode: str = "human") -> None:  # noqa: D401 – Gym signature
         event_to_str = {
             Event.CAR_DOOR_CLOSE: "CLOSE",
-            Event.CAR_DOOR_OPEN:  "OPEN",
-            Event.SPAWN_PASSENGER: "SPAWN"
+            Event.CAR_DOOR_OPEN: "OPEN",
+            Event.SPAWN_PASSENGER: "SPAWN",
         }
-        print(f"t={self.time:.1f}s | waiting={len(self.waiting)}")
         color_map = {
-            Event.CAR_DOOR_CLOSE: "\033[91m",  # Red
-            Event.CAR_DOOR_OPEN:  "\033[92m",  # Green
-            Event.SPAWN_PASSENGER: "\033[93m"  # Yellow
+            Event.CAR_DOOR_CLOSE: "\033[91m",  # red
+            Event.CAR_DOOR_OPEN: "\033[92m",  # green
+            Event.SPAWN_PASSENGER: "\033[93m",  # yellow
         }
-        color_prefix = color_map.get(self.current_event, "\033[0m")
-        print(f"{color_prefix}current event: {event_to_str[self.current_event]}\033[0m")
+        clr = color_map.get(self.current_event, "\033[0m")
+
+        print(f"t={self.time:.1f}s | waiting={len(self.waiting)}")
+        print(f"{clr}event: {event_to_str.get(self.current_event, '–')}\033[0m")
         for k, c in enumerate(self.cars):
-            print(f" Car{k} floor={c.position:.2f} dir={c.direction:+d}"
-                  f" load={len(c.passengers)} itinerary={c.itinerary}")
-        print(" Hall‑call floors:", np.where(self.hall.sum(1) > 0)[0].tolist())
-        print("-"*40)
+            print(
+                f" Car{k} floor={c.position:.2f} dir={c.direction:+d} load={len(c.passengers)} it={c.itinerary}"
+            )
+        print(" Hall‑calls:", np.where(self.hall.sum(1) > 0)[0].tolist())
+        print("-" * 40)
+
+    # ────────────────────────────────────────────────────────────────────
+    # Internal reset helper
+    # ────────────────────────────────────────────────────────────────────
+
+    def _reset_state(self) -> None:
+        self.time: float = 0.0
+        self.cars: List[Car] = [Car(self.cap) for _ in range(self.M)]
+        self.hall: np.ndarray = np.zeros((self.N, 2), int)  # ↑ / ↓ hall calls
+        self.waiting: List[Passenger] = []
+        self.done: List[Passenger] = []
+        self.current_event: Optional[Event] = None
+
+
+        self.current_passengers: int = self.total_passengers
+        self.t_passenger_arrival: Optional[float] = np.inf
+        self.new_request_this_step: Optional[int] = None
