@@ -124,7 +124,9 @@ class LOOKSolver:
         total_reward = 0
         total_done = 0
         total_waiting = 0
+        step_count = 0
         for _ in range(max_steps):
+            step_count += 1
             action = self.get_next_action((obs, info))
             # print(f"action: {action}")
             obs, reward, done, truncated, info = self.env.step(action)
@@ -136,6 +138,7 @@ class LOOKSolver:
             if done or truncated:
                 break
         # print(f"info[\"done\"]: {info['done']}")
+        print(f"step_count: {step_count}")
         return total_reward, total_done, total_waiting
     
     def benchmark(self, num_episodes=100):
