@@ -176,7 +176,7 @@ class ElevatorEnv(gym.Env):
         )
         num_passengers_in_hall = len(self.waiting)
         if num_passengers_in_car == 0 and num_passengers_in_hall == 0 and self.current_passengers == 0:
-            return self._obs(), 0.0, True, False, self._info()
+            return self._obs(), 1000.0, True, False, self._info()
         
         floor, car_idx = action
         car = self.cars[car_idx]
@@ -296,6 +296,7 @@ class ElevatorEnv(gym.Env):
             p.t_board = self.time
             car.passengers.append(p)
             self.waiting.remove(p)
+            self.board_reward += 1
             is_changed = True
 
         still_waiting = len(waiting_same_dir) > len(boardable)
@@ -339,8 +340,9 @@ class ElevatorEnv(gym.Env):
             for p in car.passengers:
                 if p.t_board is not None:
                     r += self.time - p.t_board
-        reward = -(w + r) * 1e-3 + self.arrival_reward
+        reward = -(w + r) * 1e-3 + self.arrival_reward + self.board_reward
         self.arrival_reward = 0.0
+        self.board_reward = 0.0
         # print(f"reward: {-(w + r) * 1e-3:.2f}, w = {w:.2f}, r = {r:.2f}")
         return reward
 
@@ -432,6 +434,7 @@ class ElevatorEnv(gym.Env):
         self.done: List[Passenger] = []
         self.current_event: Optional[Event] = None
         self.arrival_reward: float = 0.0
+        self.board_reward: float = 0.0
 
         self.current_passengers: int = self.total_passengers
         self.t_passenger_arrival: Optional[float] = np.inf
