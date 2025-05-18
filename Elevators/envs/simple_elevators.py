@@ -200,11 +200,11 @@ class ElevatorEnv(gym.Env):
             self.hall[o, 0 if d > o else 1] |= 1
 
     # ---------------- reward --------------------------------------------
-    def _reward_snapshot(self):
-        w = sum((self.time - p.t_request)**2 for p in self.waiting)
-        r = sum((self.time - p.t_board)**2
+    def _reward_snapshot(self): 
+        w = sum((self.time - p.t_request) for p in self.waiting)
+        r = sum((self.time - p.t_board)
                 for car in self.cars for p in car.passengers if p.t_board)
-        return -(w + r)
+        return -(w + r) * 1e-3 
 
     # ---------------- utils ---------------------------------------------
     def _legal_stop(self, car: Car, floor: int) -> bool:
