@@ -220,7 +220,7 @@ class ElevatorEnv(gym.Env):
 
         # --------------------------------------------------------------
         dt = min(self.t_passenger_arrival, t_car_next + self.time) - self.time
-        if dt is np.inf:
+        if np.isinf(dt):
             # No events to process
             return self._reward_snapshot(), None
         self.time += dt
