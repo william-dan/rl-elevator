@@ -128,7 +128,7 @@ class ElevatorEnv(gym.Env):
         max_passengers_at_a_time: int = 10,
         avg_passengers_at_a_time: float = 5.0,
         total_passengers: int = 10,
-        seed: int | None = None,
+        seed: int | None = 0,
     ) -> None:
         super().__init__()
 
@@ -147,6 +147,7 @@ class ElevatorEnv(gym.Env):
         self.total_passengers: int = total_passengers
         # ---------------- PRNG ------------------------------
         self.rng = np.random.default_rng(seed)
+        self.random_direction_rng = np.random.default_rng(seed)
 
         # ---------------- Gym spaces ------------------------------
         # Observation: (floor, car, channel) – see module docstring
@@ -165,6 +166,7 @@ class ElevatorEnv(gym.Env):
 
     def reset(self, *, seed: int | None = None, options: Optional[dict] = None):
         super().reset(seed=seed)
+        # options[""]
         self._reset_state()
         return self._obs(), self._info()
 
@@ -283,10 +285,22 @@ class ElevatorEnv(gym.Env):
                 is_changed = True
 
         # ---------------- board -------------------------------------------------
-        # Choose the direction the idle car *will* take – random tie‑break.
-        if previous_direction == 0:
-            previous_direction = int(self.rng.choice([-1, 1]))
 
+        if previous_direction == 0:
+            up_waiting = any(
+                p.origin == floor and p.destination > floor
+                for p in self.waiting
+            )
+            down_waiting = any(
+                p.origin == floor and p.destination < floor
+                for p in self.waiting
+            )
+            if up_waiting and down_waiting:
+                previous_direction = self.random_direction_rng.choice([-1, 1])
+            elif up_waiting:
+                previous_direction = 1
+            elif down_waiting:
+                previous_direction = -1
         waiting_same_dir = [
             p
             for p in self.waiting
@@ -306,6 +320,11 @@ class ElevatorEnv(gym.Env):
             # print("Still waiting passengers:", waiting_same_dir)
         dir_col = 0 if previous_direction == 1 else 1
         self.hall[floor, dir_col] = int(still_waiting)
+        # if not is_changed:
+        #     print(
+        #         f"Car {car} at floor {floor} with direction {previous_direction} "
+        #         f"and no passengers to board or alight"
+        #     )
         
         return is_changed
 

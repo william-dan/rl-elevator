@@ -88,12 +88,12 @@ class FIFOSolver(BaseSolver):
 if __name__ == "__main__":
     import Elevators
     env = gym.make("Elevators/Elevators-v0", 
-                   num_floors=20, 
-                   num_cars=4, 
-                   avg_passengers_spawning_time=5,
-                   total_passengers=50,
-                   capacity=3)
+                   num_floors=4, 
+                   num_cars=1, 
+                   avg_passengers_spawning_time=20,
+                   total_passengers=1000000,
+                   seed=0)
     solver = FIFOSolver(env)
-    rewards = solver.benchmark(num_episodes=10)
+    rewards = solver.benchmark(num_episodes=100)
     print(f"Average reward: {sum(rewards) / len(rewards)}")
     solver.plot(rewards)
