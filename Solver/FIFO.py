@@ -48,7 +48,7 @@ class FIFOSolver(BaseSolver):
         return (info["N"], 0)  # No action if no requests
         
 
-    def run_episode(self, max_steps=10000000):
+    def run_episode(self, max_steps=100):
         obs, info = self.env.reset()
         self.reset()
         self.prev_hall_calls = info['hall_calls'].copy()

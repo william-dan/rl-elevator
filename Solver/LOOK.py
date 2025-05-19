@@ -114,12 +114,12 @@ class LOOKSolver:
         
         return self._idle_action(calls, info, cars_pos)
        
-        
-
-    def run_episode(self, max_steps=10000000000):
-        obs, info = self.env.reset()
+    def reset(self, info):
         self.directions = [0 for _ in range(info["M"])]
-        
+
+    def run_episode(self, max_steps=100):
+        obs, info = self.env.reset()
+        self.reset(info)
         
         total_reward = 0
         total_done = 0
@@ -137,7 +137,7 @@ class LOOKSolver:
             # env.render()
             if done or truncated:
                 break
-        # print(f"info[\"done\"]: {info['done']}")
+        print(f"info[\"done\"]: {info['done']}")
         print(f"step_count: {step_count}")
         return total_reward, total_done, total_waiting
     
