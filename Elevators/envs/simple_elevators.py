@@ -361,7 +361,7 @@ class ElevatorEnv(gym.Env):
             for p in car.passengers:
                 if p.t_board is not None:
                     r += (self.time - p.t_board)**2
-        reward = -(w + r) * 2e-4 + self.arrival_reward * 10 + self.board_reward
+        reward = -(w + r) * 1e-3 + self.arrival_reward * 10 + self.board_reward
         # self.arrival_reward = 0.0
         # self.board_reward = 0.0
         # print(f"reward: {-(w + r) * 1e-3:.2f}, w = {w:.2f}, r = {r:.2f}")

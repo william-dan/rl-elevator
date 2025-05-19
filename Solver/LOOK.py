@@ -167,11 +167,11 @@ class LOOKSolver:
 
 if __name__ == "__main__":
     env = gym.make("Elevators/Elevators-v0", 
-                   num_floors=4, 
+                   num_floors=10, 
                    num_cars=1, 
-                   avg_passengers_spawning_time=3,
+                   avg_passengers_spawning_time=5,
                    total_passengers=1000000,
-                   capacity=4,
+                #    capacity=4,
                    seed=0)
     solver = LOOKSolver(env)
     rewards = []
