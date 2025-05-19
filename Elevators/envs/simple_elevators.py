@@ -344,8 +344,9 @@ class ElevatorEnv(gym.Env):
         # self.arrival_reward = 0.0
         # self.board_reward = 0.0
         # print(f"reward: {-(w + r) * 1e-3:.2f}, w = {w:.2f}, r = {r:.2f}")
-        reward = self.arrival_reward
+        reward = self.arrival_reward * 10 + self.board_reward
         self.arrival_reward = 0.0
+        self.board_reward = 0.0
         return reward
 
     # ------------------------------------------------------------------
