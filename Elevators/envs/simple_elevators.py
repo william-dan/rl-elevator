@@ -182,7 +182,7 @@ class ElevatorEnv(gym.Env):
         car = self.cars[car_idx]
         if car.itinerary is not None:
             # Car is already moving, ignore the action
-            return self._obs(), 0.0, False, False, self._info()
+            action = (car.itinerary, car_idx)
         if floor != self.N:  # *N* is the sentinel for "stay idle"
             car.itinerary = floor
 

@@ -136,7 +136,7 @@ class LOOKSolver:
             total_done = info["done"]
             total_waiting = info["waiting"]
             # env.render()
-            if info["time"] > max_steps:
+            if step_count > max_steps:
                 break
             if done or truncated:
                 break
