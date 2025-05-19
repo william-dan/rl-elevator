@@ -136,7 +136,7 @@ class LOOKSolver:
             total_done = info["done"]
             total_waiting = info["waiting"]
             # env.render()
-            if step_count > max_steps:
+            if info["time"] > max_steps:
                 break
             if done or truncated:
                 break
@@ -169,12 +169,13 @@ if __name__ == "__main__":
     env = gym.make("Elevators/Elevators-v0", 
                    num_floors=4, 
                    num_cars=1, 
-                   avg_passengers_spawning_time=20,
+                   avg_passengers_spawning_time=3,
                    total_passengers=1000000,
+                   capacity=4,
                    seed=0)
     solver = LOOKSolver(env)
     rewards = []
-    rewards = solver.benchmark(num_episodes=100)
+    rewards = solver.benchmark(num_episodes=1)
     # print(f"rewards: {rewards}")
     print(f"mean reward: {np.mean(rewards)}")
     solver.plot(rewards)
