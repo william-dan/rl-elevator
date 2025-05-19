@@ -117,7 +117,7 @@ class LOOKSolver:
     def reset(self, info):
         self.directions = [0 for _ in range(info["M"])]
 
-    def run_episode(self, max_steps=100):
+    def run_episode(self, max_steps=200):
         obs, info = self.env.reset()
         self.reset(info)
         
@@ -125,7 +125,8 @@ class LOOKSolver:
         total_done = 0
         total_waiting = 0
         step_count = 0
-        for _ in range(max_steps):
+        while True:
+        
             step_count += 1
             action = self.get_next_action((obs, info))
             # print(f"action: {action}")
@@ -135,10 +136,13 @@ class LOOKSolver:
             total_done = info["done"]
             total_waiting = info["waiting"]
             # env.render()
+            if info["time"] > max_steps:
+                break
             if done or truncated:
                 break
         print(f"info[\"done\"]: {info['done']}")
         print(f"step_count: {step_count}")
+        print(f"time: {info['time']}")
         return total_reward, total_done, total_waiting
     
     def benchmark(self, num_episodes=100):
@@ -166,11 +170,11 @@ if __name__ == "__main__":
                    num_floors=20, 
                    num_cars=4, 
                    avg_passengers_spawning_time=5,
-                   total_passengers=50,
+                   total_passengers=1000000,
                    capacity=3)
     solver = LOOKSolver(env)
     rewards = []
-    rewards = solver.benchmark(num_episodes=10)
+    rewards = solver.benchmark(num_episodes=100)
     # print(f"rewards: {rewards}")
     print(f"mean reward: {np.mean(rewards)}")
     solver.plot(rewards)
