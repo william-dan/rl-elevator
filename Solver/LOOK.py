@@ -171,7 +171,7 @@ if __name__ == "__main__":
                    num_cars=1, 
                    avg_passengers_spawning_time=5,
                    total_passengers=1000000,
-                #    capacity=4,
+                   capacity=4,
                    seed=0)
     solver = LOOKSolver(env)
     rewards = []
