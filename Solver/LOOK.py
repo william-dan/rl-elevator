@@ -117,7 +117,7 @@ class LOOKSolver:
     def reset(self, info):
         self.directions = [0 for _ in range(info["M"])]
 
-    def run_episode(self, max_steps=200):
+    def run_episode(self, max_steps=100):
         obs, info = self.env.reset()
         self.reset(info)
         
