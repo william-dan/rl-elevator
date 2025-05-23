@@ -368,6 +368,7 @@ class ElevatorEnv(gym.Env):
         reward = self.arrival_reward * 10 + self.board_reward
         self.arrival_reward = 0.0
         self.board_reward = 0.0
+        self.reward += reward
         return reward
 
     # ------------------------------------------------------------------
@@ -404,6 +405,7 @@ class ElevatorEnv(gym.Env):
 
     def _info(self) -> Dict[str, Any]:
         return {
+            "reward": self.reward,
             "time": self.time,
             "waiting": len(self.waiting),
             "done": len(self.done),
@@ -438,7 +440,8 @@ class ElevatorEnv(gym.Env):
         clr = color_map.get(self.current_event, "\033[0m")
 
         print(f"t={self.time:.1f}s | waiting={len(self.waiting)}")
-        print(f"{clr}event: {event_to_str.get(self.current_event, '–')}\033[0m")
+        # print(f"{clr}event: {event_to_str.get(self.current_event, '–')}\033[0m")
+        print(f"event: {event_to_str.get(self.current_event, '–')}")
         for k, c in enumerate(self.cars):
             print(
                 f" Car{k} floor={c.position:.2f} dir={c.direction:+d} load={len(c.passengers)} it={c.itinerary}"
@@ -451,6 +454,7 @@ class ElevatorEnv(gym.Env):
     # ────────────────────────────────────────────────────────────────────
 
     def _reset_state(self) -> None:
+        self.reward = 0.0
         self.time: float = 0.0
         self.cars: List[Car] = [Car(self.cap) for _ in range(self.M)]
         self.hall: np.ndarray = np.zeros((self.N, 2), int)  # ↑ / ↓ hall calls

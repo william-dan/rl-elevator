@@ -2,6 +2,7 @@ import gymnasium as gym
 import Elevators
 from collections import deque
 import numpy as np
+import csv
 
 import Elevators.envs
 import Elevators.envs.simple_elevators
@@ -140,9 +141,9 @@ class LOOKSolver:
                 break
             if done or truncated:
                 break
-        print(f"info[\"done\"]: {info['done']}")
-        print(f"step_count: {step_count}")
-        print(f"time: {info['time']}")
+        # print(f"info[\"done\"]: {info['done']}")
+        # print(f"step_count: {step_count}")
+        # print(f"time: {info['time']}")
         return total_reward, total_done, total_waiting
     
     def benchmark(self, num_episodes=100):
@@ -167,15 +168,20 @@ class LOOKSolver:
 
 if __name__ == "__main__":
     env = gym.make("Elevators/Elevators-v0", 
-                   num_floors=3, 
+                   num_floors=6, 
                    num_cars=1, 
                    avg_passengers_spawning_time=5,
                    total_passengers=1000000,
-                   capacity=12,
+                #    capacity=12,
                    seed=0)
     solver = LOOKSolver(env)
     rewards = []
-    rewards = solver.benchmark(num_episodes=1)
+    rewards = solver.benchmark(num_episodes=1000)
     # print(f"rewards: {rewards}")
+    with open("./Solver/look-rewards-6-1.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["reward"])
+        for r in rewards:
+            writer.writerow([r])
     print(f"mean reward: {np.mean(rewards)}")
     solver.plot(rewards)

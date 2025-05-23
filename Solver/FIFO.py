@@ -3,6 +3,7 @@ from collections import deque
 from BaseSolver import BaseSolver
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import csv
 
 class FIFOSolver(BaseSolver):
     def __init__(self, env: gym.Env):
@@ -53,8 +54,8 @@ class FIFOSolver(BaseSolver):
         self.reset()
         self.prev_hall_calls = info['hall_calls'].copy()
         total_reward = 0
-        for _ in (range(max_steps)):
-            
+        # for _ in (range(max_steps)):
+        while info["time"] < max_steps:
             action = self.get_next_action(info)
             obs, reward, done, truncated, info = self.env.step(action)
             # self.env.render()
@@ -88,12 +89,18 @@ class FIFOSolver(BaseSolver):
 if __name__ == "__main__":
     import Elevators
     env = gym.make("Elevators/Elevators-v0", 
-                   num_floors=4, 
+                   num_floors=3, 
                    num_cars=1, 
-                   avg_passengers_spawning_time=20,
+                   avg_passengers_spawning_time=5,
                    total_passengers=1000000,
+                #    capacity=12,
                    seed=0)
     solver = FIFOSolver(env)
-    rewards = solver.benchmark(num_episodes=100)
+    rewards = solver.benchmark(num_episodes=1000)
+    with open("./Solver/fifo-rewards.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["reward"])
+        for r in rewards:
+            writer.writerow([r])
     print(f"Average reward: {sum(rewards) / len(rewards)}")
     solver.plot(rewards)
