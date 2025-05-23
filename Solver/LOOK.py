@@ -176,12 +176,12 @@ if __name__ == "__main__":
                    seed=0)
     solver = LOOKSolver(env)
     rewards = []
-    rewards = solver.benchmark(num_episodes=1000)
+    rewards = solver.benchmark(num_episodes=1)
     # print(f"rewards: {rewards}")
-    with open("./Solver/look-rewards-6-1.csv", "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["reward"])
-        for r in rewards:
-            writer.writerow([r])
+    # with open("./Solver/look-rewards-3-1.csv", "w", newline="") as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow(["reward"])
+    #     for r in rewards:
+    #         writer.writerow([r])
     print(f"mean reward: {np.mean(rewards)}")
     solver.plot(rewards)

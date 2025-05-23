@@ -1,0 +1,260 @@
+t=3.4s | waiting=6
+event: SPAWN
+ Car0 floor=1.46 dir=+1 load=0 it=3
+ Hall‑calls: [1]
+----------------------------------------
+t=6.8s | waiting=10
+event: SPAWN
+ Car0 floor=2.90 dir=+1 load=0 it=3
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=8.9s | waiting=10
+event: OPEN
+ Car0 floor=2.00 dir=-1 load=0 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=10.9s | waiting=10
+event: CLOSE
+ Car0 floor=2.00 dir=-1 load=0 it=0
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=15.5s | waiting=10
+event: OPEN
+ Car0 floor=0.00 dir=-1 load=0 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=17.5s | waiting=10
+event: CLOSE
+ Car0 floor=0.00 dir=-1 load=0 it=2
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=22.2s | waiting=10
+event: OPEN
+ Car0 floor=2.00 dir=+1 load=0 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=23.2s | waiting=11
+event: SPAWN
+ Car0 floor=2.00 dir=+1 load=0 it=2
+ Hall‑calls: [1, 2, 5]
+----------------------------------------
+t=23.6s | waiting=17
+event: SPAWN
+ Car0 floor=2.00 dir=+1 load=0 it=2
+ Hall‑calls: [1, 2, 5]
+----------------------------------------
+t=24.2s | waiting=17
+event: CLOSE
+ Car0 floor=2.00 dir=+1 load=0 it=3
+ Hall‑calls: [1, 2, 5]
+----------------------------------------
+t=24.2s | waiting=16
+event: OPEN
+ Car0 floor=2.00 dir=+0 load=1 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=26.2s | waiting=16
+event: CLOSE
+ Car0 floor=2.00 dir=+0 load=1 it=3
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=26.2s | waiting=16
+event: OPEN
+ Car0 floor=2.00 dir=+0 load=1 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=28.2s | waiting=16
+event: CLOSE
+ Car0 floor=2.00 dir=+0 load=1 it=2
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=31.0s | waiting=17
+event: SPAWN
+ Car0 floor=0.79 dir=-1 load=1 it=0
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=31.5s | waiting=15
+event: OPEN
+ Car0 floor=1.00 dir=+1 load=3 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=33.5s | waiting=15
+event: CLOSE
+ Car0 floor=1.00 dir=+1 load=3 it=2
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=33.5s | waiting=10
+event: OPEN
+ Car0 floor=1.00 dir=+0 load=8 it=None
+ Hall‑calls: [5]
+----------------------------------------
+t=35.5s | waiting=10
+event: CLOSE
+ Car0 floor=1.00 dir=+0 load=8 it=3
+ Hall‑calls: [5]
+----------------------------------------
+t=36.2s | waiting=14
+event: SPAWN
+ Car0 floor=1.28 dir=+1 load=8 it=3
+ Hall‑calls: [0, 5]
+----------------------------------------
+t=37.8s | waiting=14
+event: OPEN
+ Car0 floor=2.00 dir=+1 load=8 it=None
+ Hall‑calls: [0, 5]
+----------------------------------------
+t=38.4s | waiting=24
+event: SPAWN
+ Car0 floor=2.00 dir=+1 load=8 it=2
+ Hall‑calls: [0, 5]
+----------------------------------------
+t=39.8s | waiting=24
+event: CLOSE
+ Car0 floor=2.00 dir=+1 load=8 it=0
+ Hall‑calls: [0, 5]
+----------------------------------------
+t=42.2s | waiting=24
+event: OPEN
+ Car0 floor=3.00 dir=+1 load=8 it=None
+ Hall‑calls: [0, 5]
+----------------------------------------
+t=43.7s | waiting=31
+event: SPAWN
+ Car0 floor=3.00 dir=+1 load=8 it=1
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=44.2s | waiting=31
+event: CLOSE
+ Car0 floor=3.00 dir=+1 load=8 it=1
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=51.2s | waiting=31
+event: OPEN
+ Car0 floor=0.00 dir=-1 load=3 it=None
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=53.1s | waiting=34
+event: SPAWN
+ Car0 floor=0.00 dir=-1 load=3 it=2
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=53.2s | waiting=34
+event: CLOSE
+ Car0 floor=0.00 dir=-1 load=3 it=0
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=54.5s | waiting=38
+event: SPAWN
+ Car0 floor=0.55 dir=+1 load=3 it=1
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=55.5s | waiting=29
+event: OPEN
+ Car0 floor=1.00 dir=+1 load=12 it=None
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=57.5s | waiting=29
+event: CLOSE
+ Car0 floor=1.00 dir=+1 load=12 it=2
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=59.8s | waiting=29
+event: OPEN
+ Car0 floor=0.00 dir=-1 load=12 it=None
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=61.8s | waiting=29
+event: CLOSE
+ Car0 floor=0.00 dir=-1 load=12 it=3
+ Hall‑calls: [0, 1, 5]
+----------------------------------------
+t=61.8s | waiting=25
+event: OPEN
+ Car0 floor=0.00 dir=+0 load=16 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=63.8s | waiting=25
+event: CLOSE
+ Car0 floor=0.00 dir=+0 load=16 it=1
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=63.8s | waiting=25
+event: OPEN
+ Car0 floor=0.00 dir=+0 load=16 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=65.8s | waiting=25
+event: CLOSE
+ Car0 floor=0.00 dir=+0 load=16 it=1
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=65.8s | waiting=25
+event: OPEN
+ Car0 floor=0.00 dir=+0 load=16 it=None
+ Hall‑calls: [1, 5]
+----------------------------------------
+t=65.9s | waiting=28
+event: SPAWN
+ Car0 floor=0.00 dir=+0 load=16 it=2
+ Hall‑calls: [1, 4, 5]
+----------------------------------------
+t=67.3s | waiting=30
+event: SPAWN
+ Car0 floor=0.00 dir=+0 load=16 it=0
+ Hall‑calls: [1, 4, 5]
+----------------------------------------
+t=67.8s | waiting=30
+event: CLOSE
+ Car0 floor=0.00 dir=+0 load=16 it=3
+ Hall‑calls: [1, 4, 5]
+----------------------------------------
+t=69.9s | waiting=31
+event: SPAWN
+ Car0 floor=0.90 dir=+1 load=16 it=3
+ Hall‑calls: [1, 4, 5]
+----------------------------------------
+t=72.4s | waiting=32
+event: SPAWN
+ Car0 floor=1.97 dir=+1 load=16 it=3
+ Hall‑calls: [1, 2, 4, 5]
+----------------------------------------
+t=73.9s | waiting=35
+event: SPAWN
+ Car0 floor=2.60 dir=+1 load=16 it=3
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=78.9s | waiting=36
+event: SPAWN
+ Car0 floor=0.46 dir=-1 load=16 it=0
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=84.8s | waiting=34
+event: OPEN
+ Car0 floor=3.00 dir=+1 load=16 it=None
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=86.8s | waiting=34
+event: CLOSE
+ Car0 floor=3.00 dir=+1 load=16 it=2
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=89.2s | waiting=34
+event: OPEN
+ Car0 floor=2.00 dir=-1 load=10 it=None
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=91.2s | waiting=34
+event: CLOSE
+ Car0 floor=2.00 dir=-1 load=10 it=3
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=93.3s | waiting=39
+event: SPAWN
+ Car0 floor=2.92 dir=+1 load=10 it=3
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------
+t=100.1s | waiting=39
+event: OPEN
+ Car0 floor=0.00 dir=-1 load=10 it=None
+ Hall‑calls: [1, 2, 3, 4, 5]
+----------------------------------------

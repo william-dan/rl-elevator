@@ -89,18 +89,18 @@ class FIFOSolver(BaseSolver):
 if __name__ == "__main__":
     import Elevators
     env = gym.make("Elevators/Elevators-v0", 
-                   num_floors=3, 
+                   num_floors=6, 
                    num_cars=1, 
                    avg_passengers_spawning_time=5,
                    total_passengers=1000000,
                 #    capacity=12,
                    seed=0)
     solver = FIFOSolver(env)
-    rewards = solver.benchmark(num_episodes=1000)
-    with open("./Solver/fifo-rewards.csv", "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["reward"])
-        for r in rewards:
-            writer.writerow([r])
+    rewards = solver.benchmark(num_episodes=1)
+    # with open("./Solver/fifo-rewards-3-1.csv", "w", newline="") as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow(["reward"])
+    #     for r in rewards:
+    #         writer.writerow([r])
     print(f"Average reward: {sum(rewards) / len(rewards)}")
     solver.plot(rewards)

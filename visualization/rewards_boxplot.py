@@ -32,16 +32,16 @@ def load_reward_series(paths):
             print(f"⚠️  Could not read {fp}: {exc}")
             continue
 
-        if 'reward' not in df.columns:
+        if 'Reward' not in df.columns:
             print(f"⚠️  Skipping {fp.name}: no 'reward' column.")
             continue
 
-        series_list.append(df['reward'].dropna())
+        series_list.append(df['Reward'].dropna())
         labels.append(fp.stem)
     return series_list, labels
 
 
-def plot_reward_boxplot(data_series, labels, title="Reward distribution by file"):
+def plot_reward_boxplot(data_series, labels, title="Reward distribution"):
     """Draw a notched boxplot with subtle style tweaks (no explicit colours)."""
     if not data_series:
         raise ValueError("No reward data provided.")
@@ -71,8 +71,8 @@ def plot_reward_boxplot(data_series, labels, title="Reward distribution by file"
     ax.set_title(title, fontsize=14, pad=12)
     ax.tick_params(axis='x', rotation=12)
     ax.grid(axis='y', linestyle='--', alpha=0.3)
-
     plt.tight_layout()
+    plt.savefig("rewards_boxplot_3_1.png", dpi=120)
     plt.show()
 
 

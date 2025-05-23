@@ -136,6 +136,7 @@ def build_plot(log_paths: List[Path]):
     fig.colorbar(sm, ax=ax, label="Load (passengers)")
 
     fig.tight_layout()
+    plt.savefig("load_6_1.png", dpi=300)
     plt.show()
 
 # ── CLI ─────────────────────────────────────────────────────────────────────

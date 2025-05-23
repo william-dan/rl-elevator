@@ -351,25 +351,27 @@ class ElevatorEnv(gym.Env):
 
     def _reward_snapshot(self) -> float:
         """Negative waiting + riding time (scaled)."""
-        # w = 0.0
-        # for p in self.waiting:
-        #     if p.t_request is not None:
-        #         w += (self.time - p.t_request)**2
+        w = 0.0
+        for p in self.waiting:
+            if p.t_request is not None:
+                w += (self.time - p.t_request)**2
     
-        # r = 0.0
-        # for car in self.cars:
-        #     for p in car.passengers:
-        #         if p.t_board is not None:
-        #             r += (self.time - p.t_board)**2
+        r = 0.0
+        for car in self.cars:
+            for p in car.passengers:
+                if p.t_board is not None:
+                    r += (self.time - p.t_board)**2
+        return -(w + r)
         # reward = -(w + r) * 1e-3 + self.arrival_reward * 10 + self.board_reward
         # self.arrival_reward = 0.0
         # self.board_reward = 0.0
         # print(f"reward: {-(w + r) * 1e-3:.2f}, w = {w:.2f}, r = {r:.2f}")
-        reward = self.arrival_reward * 10 + self.board_reward
-        self.arrival_reward = 0.0
-        self.board_reward = 0.0
-        self.reward += reward
-        return reward
+        
+        # reward = self.arrival_reward * 10 + self.board_reward
+        # self.arrival_reward = 0.0
+        # self.board_reward = 0.0
+        # self.reward += reward
+        # return reward
 
     # ------------------------------------------------------------------
 

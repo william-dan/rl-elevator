@@ -70,14 +70,16 @@ def parse_log(path: os.PathLike | str) -> List[Tuple[float, str]]:
                 continue  # look at next line for the event
 
             me = _EVENT_RE.search(line)
+            
             if me and current_time is not None:
-                events.append((current_time, me.group(1)))
+                if me.group(1) == "SPAWN":
+                    events.append((current_time, me.group(1)))
                 # we *do not* reset current_time – a block can have multiple
                 # event lines (open/close pairs, etc.) with the same timestamp.
 
     # Sort just in case the file isn’t strictly ordered
     events.sort(key=lambda pair: pair[0])
-    print(f"events: {events}")
+    # print(f"events: {events}")
     return events
 
 # ---------------------------------------------------------------------------
@@ -141,6 +143,7 @@ def plot_eventflows(log_paths: List[str]) -> None:
     ax.grid(axis="y", linestyle=":", alpha=0.5)
 
     fig.tight_layout()
+    plt.savefig("6_1_spawn.png", dpi=300)
     plt.show()
 
 # ---------------------------------------------------------------------------
