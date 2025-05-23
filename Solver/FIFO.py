@@ -54,11 +54,11 @@ class FIFOSolver(BaseSolver):
         self.reset()
         self.prev_hall_calls = info['hall_calls'].copy()
         total_reward = 0
-        # for _ in (range(max_steps)):
-        while info["time"] < max_steps:
+        for _ in (range(max_steps)):
+        # while info["time"] < max_steps:
             action = self.get_next_action(info)
             obs, reward, done, truncated, info = self.env.step(action)
-            # self.env.render()
+            self.env.render()
             total_reward += reward
             if done or truncated:
                 break
@@ -89,7 +89,7 @@ class FIFOSolver(BaseSolver):
 if __name__ == "__main__":
     import Elevators
     env = gym.make("Elevators/Elevators-v0", 
-                   num_floors=6, 
+                   num_floors=3, 
                    num_cars=1, 
                    avg_passengers_spawning_time=5,
                    total_passengers=1000000,

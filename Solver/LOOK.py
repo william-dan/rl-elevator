@@ -126,8 +126,8 @@ class LOOKSolver:
         total_done = 0
         total_waiting = 0
         step_count = 0
-        while True:
-        
+        for _ in (range(max_steps)):
+        # while info["time"] < max_steps:
             step_count += 1
             action = self.get_next_action((obs, info))
             # print(f"action: {action}")
@@ -136,9 +136,7 @@ class LOOKSolver:
             total_reward += reward
             total_done = info["done"]
             total_waiting = info["waiting"]
-            # env.render()
-            if info["time"] > max_steps:
-                break
+            env.render()
             if done or truncated:
                 break
         # print(f"info[\"done\"]: {info['done']}")
